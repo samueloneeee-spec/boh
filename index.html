@@ -119,9 +119,10 @@ function processFrame(){
                     if(lastSpeeds.length>5) lastSpeeds.shift();
                     const speedAvg=lastSpeeds.reduce((a,b)=>a+b,0)/lastSpeeds.length;
 
-                    // Calcolo forza solo se c'è stato movimento reale
-                    let forzaCalcolata=Math.min(999,Math.floor(speedAvg/30)*10);
-                    forzaCalcolata=Math.max(forzaCalcolata,50);
+                    // scala corretta: colpo medio ~600, max 999
+                    let forzaCalcolata = Math.floor(speedAvg*2.5); 
+                    if(forzaCalcolata>999) forzaCalcolata=999;
+                    if(forzaCalcolata<50) forzaCalcolata=50;
 
                     forzaAttuale+=(forzaCalcolata-forzaAttuale)*0.1;
                     forzaLabel.textContent="Forza: "+Math.floor(forzaAttuale);
