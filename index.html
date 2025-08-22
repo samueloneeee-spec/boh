@@ -75,7 +75,8 @@
     const playAgainBtn = document.getElementById("playAgainBtn");
 
     let punteggioBloccato = false;
-    let lastPositions = []; // array per media mobile centro punch ball
+    let lastPositions = [];
+    let lastSpeeds = [];
     let forzaAttuale = 0;
 
     startBtn.addEventListener('click', async () => {
@@ -90,6 +91,7 @@
       punteggioBloccato = false;
       forzaAttuale = 0;
       lastPositions = [];
+      lastSpeeds = [];
       forzaLabel.textContent = "Forza: 0";
       playAgainBtn.style.display = 'none';
     });
@@ -122,7 +124,7 @@
         const data = frame.data;
 
         let redX = 0, redY = 0, count = 0;
-        const minPixels = 80; // richiede abbastanza pixel
+        const minPixels = 80;
 
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i], g = data[i+1], b = data[i+2];
@@ -137,14 +139,14 @@
           }
         }
 
-        if (count >= minPixels && !punteggioBloccato) {
+        if(count >= minPixels && !punteggioBloccato){
           const avgX = redX / count;
           const avgY = redY / count;
 
           lastPositions.push({x: avgX, y: avgY});
-          if(lastPositions.length > 5) lastPositions.shift(); // media ultimi 5 frame
+          if(lastPositions.length > 5) lastPositions.shift();
 
-          const sum = lastPositions.reduce((acc,p) => { acc.x+=p.x; acc.y+=p.y; return acc; }, {x:0,y:0});
+          const sum = lastPositions.reduce((acc,p)=>{acc.x+=p.x;acc.y+=p.y;return acc;},{x:0,y:0});
           const centerX = sum.x / lastPositions.length;
           const centerY = sum.y / lastPositions.length;
 
@@ -158,27 +160,34 @@
             const dx = centerX - lastPositions[lastPositions.length-2].x;
             const dy = centerY - lastPositions[lastPositions.length-2].y;
             const dist = Math.sqrt(dx*dx + dy*dy);
-            const dt = 1/60; // assume 60fps per frame
-            const speed = dist / dt;
+            const dt = 1/60;
+            let speed = dist / dt;
 
-            // scala realistica: forza media circa 600, massimo 999
-            let forzaCalcolata = Math.min(999, Math.floor(speed / 40) * 10);
-            forzaCalcolata = Math.max(forzaCalcolata, 50); // minimo punteggio per colpo
+            // media mobile velocità ultimi 5 frame
+            lastSpeeds.push(speed);
+            if(lastSpeeds.length > 5) lastSpeeds.shift();
+            const speedAvg = lastSpeeds.reduce((a,b)=>a+b,0)/lastSpeeds.length;
 
-            // incremento fluido
-            forzaAttuale += (forzaCalcolata - forzaAttuale) * 0.1;
-            forzaLabel.textContent = "Forza: " + Math.floor(forzaAttuale);
+            // limite minimo velocità per colpi forti
+            const speedUsata = Math.max(speedAvg, 120);
+
+            // scala realistica: colpo medio 600, max 999
+            let forzaCalcolata = Math.min(999, Math.floor(speedUsata/35)*10);
+            forzaCalcolata = Math.max(forzaCalcolata,50);
+
+            forzaAttuale += (forzaCalcolata - forzaAttuale)*0.1;
+            forzaLabel.textContent = "Forza: "+Math.floor(forzaAttuale);
 
             if(forzaAttuale > 800){
               forzaLabel.classList.add("flash");
               hitSound.play().catch(()=>{});
-              setTimeout(()=> forzaLabel.classList.remove("flash"), 300);
+              setTimeout(()=>forzaLabel.classList.remove("flash"),300);
             }
 
-            if(speed > 150 && !punteggioBloccato){ // colpo rilevato
+            if(speedUsata > 150 && !punteggioBloccato){
               punteggioBloccato = true;
               forzaAttuale = Math.floor(forzaAttuale);
-              forzaLabel.textContent = "Forza: " + forzaAttuale;
+              forzaLabel.textContent = "Forza: "+forzaAttuale;
               playAgainBtn.style.display = 'block';
             }
           }
