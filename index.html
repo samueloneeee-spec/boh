@@ -160,35 +160,36 @@
             const dx = centerX - lastPositions[lastPositions.length-2].x;
             const dy = centerY - lastPositions[lastPositions.length-2].y;
             const dist = Math.sqrt(dx*dx + dy*dy);
-            const dt = 1/60;
-            let speed = dist / dt;
 
-            // media mobile velocità ultimi 5 frame
-            lastSpeeds.push(speed);
-            if(lastSpeeds.length > 5) lastSpeeds.shift();
-            const speedAvg = lastSpeeds.reduce((a,b)=>a+b,0)/lastSpeeds.length;
+            const movimentoMin = 5; // movimento minimo per aggiornare forza
+            if(dist > movimentoMin){
+              const dt = 1/60;
+              let speed = dist / dt;
 
-            // limite minimo velocità per colpi forti
-            const speedUsata = Math.max(speedAvg, 120);
+              lastSpeeds.push(speed);
+              if(lastSpeeds.length > 5) lastSpeeds.shift();
+              const speedAvg = lastSpeeds.reduce((a,b)=>a+b,0)/lastSpeeds.length;
 
-            // scala realistica: colpo medio 600, max 999
-            let forzaCalcolata = Math.min(999, Math.floor(speedUsata/35)*10);
-            forzaCalcolata = Math.max(forzaCalcolata,50);
+              const speedUsata = Math.max(speedAvg, 120);
 
-            forzaAttuale += (forzaCalcolata - forzaAttuale)*0.1;
-            forzaLabel.textContent = "Forza: "+Math.floor(forzaAttuale);
+              let forzaCalcolata = Math.min(999, Math.floor(speedUsata/35)*10);
+              forzaCalcolata = Math.max(forzaCalcolata,50);
 
-            if(forzaAttuale > 800){
-              forzaLabel.classList.add("flash");
-              hitSound.play().catch(()=>{});
-              setTimeout(()=>forzaLabel.classList.remove("flash"),300);
-            }
+              forzaAttuale += (forzaCalcolata - forzaAttuale)*0.1;
+              forzaLabel.textContent = "Forza: "+Math.floor(forzaAttuale);
 
-            if(speedUsata > 150 && !punteggioBloccato){
-              punteggioBloccato = true;
-              forzaAttuale = Math.floor(forzaAttuale);
-              forzaLabel.textContent = "Forza: "+forzaAttuale;
-              playAgainBtn.style.display = 'block';
+              if(forzaAttuale > 800){
+                forzaLabel.classList.add("flash");
+                hitSound.play().catch(()=>{});
+                setTimeout(()=>forzaLabel.classList.remove("flash"),300);
+              }
+
+              if(speedUsata > 150 && !punteggioBloccato){
+                punteggioBloccato = true;
+                forzaAttuale = Math.floor(forzaAttuale);
+                forzaLabel.textContent = "Forza: "+forzaAttuale;
+                playAgainBtn.style.display = 'block';
+              }
             }
           }
         }
