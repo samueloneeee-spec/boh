@@ -74,8 +74,9 @@
     const startBtn = document.getElementById("startBtn");
     const playAgainBtn = document.getElementById("playAgainBtn");
 
-    let lastX = null, lastY = null, lastTime = null;
     let punteggioBloccato = false;
+    let lastPositions = []; // array per media mobile centro punch ball
+    let forzaAttuale = 0;
 
     startBtn.addEventListener('click', async () => {
       startBtn.style.display = 'none';
@@ -87,12 +88,12 @@
 
     playAgainBtn.addEventListener('click', () => {
       punteggioBloccato = false;
+      forzaAttuale = 0;
+      lastPositions = [];
       forzaLabel.textContent = "Forza: 0";
-      lastX = lastY = lastTime = null;
       playAgainBtn.style.display = 'none';
     });
 
-    // Funzione per convertire RGB → HSL
     function rgbToHsl(r, g, b) {
       r /= 255; g /= 255; b /= 255;
       const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -121,13 +122,11 @@
         const data = frame.data;
 
         let redX = 0, redY = 0, count = 0;
-        const minPixels = 50;
+        const minPixels = 80; // richiede abbastanza pixel
 
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i], g = data[i+1], b = data[i+2];
           const [h, s, l] = rgbToHsl(r, g, b);
-
-          // Considera solo il rosso puro: hue 0-10° o 350-360°, saturazione > 60%, luminosità media
           if(((h >= 0 && h <= 10) || (h >= 350 && h <= 360)) && s > 60 && l > 30 && l < 80) {
             const index = i / 4;
             const x = index % canvas.width;
@@ -141,40 +140,48 @@
         if (count >= minPixels && !punteggioBloccato) {
           const avgX = redX / count;
           const avgY = redY / count;
+
+          lastPositions.push({x: avgX, y: avgY});
+          if(lastPositions.length > 5) lastPositions.shift(); // media ultimi 5 frame
+
+          const sum = lastPositions.reduce((acc,p) => { acc.x+=p.x; acc.y+=p.y; return acc; }, {x:0,y:0});
+          const centerX = sum.x / lastPositions.length;
+          const centerY = sum.y / lastPositions.length;
+
           ctx.beginPath();
-          ctx.arc(avgX, avgY, 20, 0, 2 * Math.PI);
+          ctx.arc(centerX, centerY, 20, 0, 2*Math.PI);
           ctx.strokeStyle = "lime";
           ctx.lineWidth = 4;
           ctx.stroke();
 
-          const now = performance.now();
-          if (lastX !== null && lastY !== null && lastTime !== null) {
-            const dx = avgX - lastX;
-            const dy = avgY - lastY;
+          if(lastPositions.length >= 2){
+            const dx = centerX - lastPositions[lastPositions.length-2].x;
+            const dy = centerY - lastPositions[lastPositions.length-2].y;
             const dist = Math.sqrt(dx*dx + dy*dy);
-            const dt = (now - lastTime) / 1000;
+            const dt = 1/60; // assume 60fps per frame
             const speed = dist / dt;
 
-            // FORZA più lenta: sale lentamente
-            let forza = Math.min(999, Math.floor(speed / 25));
-            forzaLabel.textContent = "Forza: " + forza;
+            // scala realistica: forza media circa 600, massimo 999
+            let forzaCalcolata = Math.min(999, Math.floor(speed / 40) * 10);
+            forzaCalcolata = Math.max(forzaCalcolata, 50); // minimo punteggio per colpo
 
-            if (forza > 800) {
+            // incremento fluido
+            forzaAttuale += (forzaCalcolata - forzaAttuale) * 0.1;
+            forzaLabel.textContent = "Forza: " + Math.floor(forzaAttuale);
+
+            if(forzaAttuale > 800){
               forzaLabel.classList.add("flash");
               hitSound.play().catch(()=>{});
-              setTimeout(() => forzaLabel.classList.remove("flash"), 300);
+              setTimeout(()=> forzaLabel.classList.remove("flash"), 300);
             }
 
-            // Blocca punteggio al colpo veloce
-            if (speed > 200 && !punteggioBloccato) {
+            if(speed > 150 && !punteggioBloccato){ // colpo rilevato
               punteggioBloccato = true;
+              forzaAttuale = Math.floor(forzaAttuale);
+              forzaLabel.textContent = "Forza: " + forzaAttuale;
               playAgainBtn.style.display = 'block';
             }
           }
-
-          lastX = avgX;
-          lastY = avgY;
-          lastTime = now;
         }
 
         requestAnimationFrame(process);
