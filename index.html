@@ -23,6 +23,7 @@
       height: 240px;
       border: 3px solid #fff;
       border-radius: 12px;
+      cursor: crosshair;
     }
     #score, #record {
       font-size: 2rem;
@@ -40,9 +41,8 @@
     button:hover {
       background: #ff6666;
     }
-    canvas {
-      display: none; /* nascosto: serve per calcolare il movimento */
-    }
+    canvas { display: none; }
+    #area-msg { margin-top: 10px; font-size: 1rem; color: #aaa; }
   </style>
 </head>
 <body>
@@ -50,6 +50,7 @@
   <video id="video" autoplay playsinline></video>
   <canvas id="canvas" width="320" height="240"></canvas>
 
+  <div id="area-msg">Disegna l’area del punchball cliccando e trascinando sul video</div>
   <div id="score">Punteggio: 0</div>
   <div id="record">Record: 0</div>
   <button id="reset">Gioca ancora</button>
@@ -61,11 +62,14 @@
     const scoreEl = document.getElementById('score');
     const recordEl = document.getElementById('record');
     const resetBtn = document.getElementById('reset');
+    const areaMsg = document.getElementById('area-msg');
 
     let lastFrame = null;
     let locked = false;
     let record = localStorage.getItem('record') || 0;
     recordEl.textContent = "Record: " + record;
+
+    let punchArea = null; // area selezionata dal mouse
 
     // Attiva fotocamera
     navigator.mediaDevices.getUserMedia({ video: true })
@@ -76,28 +80,59 @@
         alert("Errore accesso fotocamera: " + err);
       });
 
+    // Disegno area con mouse
+    let startX, startY;
+    video.addEventListener("mousedown", (e) => {
+      const rect = video.getBoundingClientRect();
+      startX = e.clientX - rect.left;
+      startY = e.clientY - rect.top;
+    });
+
+    video.addEventListener("mouseup", (e) => {
+      const rect = video.getBoundingClientRect();
+      const endX = e.clientX - rect.left;
+      const endY = e.clientY - rect.top;
+      punchArea = {
+        x: Math.min(startX, endX) * (canvas.width / video.clientWidth),
+        y: Math.min(startY, endY) * (canvas.height / video.clientHeight),
+        w: Math.abs(endX - startX) * (canvas.width / video.clientWidth),
+        h: Math.abs(endY - startY) * (canvas.height / video.clientHeight)
+      };
+      areaMsg.textContent = "Area del punchball registrata!";
+    });
+
     function detectMovement() {
-      if (locked) return;
+      if (!punchArea) {
+        requestAnimationFrame(detectMovement);
+        return;
+      }
+      if (locked) {
+        requestAnimationFrame(detectMovement);
+        return;
+      }
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
       if (lastFrame) {
         let diff = 0;
-        for (let i = 0; i < frame.data.length; i += 4) {
-          let delta = Math.abs(frame.data[i] - lastFrame.data[i]) +
-                      Math.abs(frame.data[i+1] - lastFrame.data[i+1]) +
-                      Math.abs(frame.data[i+2] - lastFrame.data[i+2]);
-          if (delta > 50) diff++;
+        let {x, y, w, h} = punchArea;
+        for (let row = y; row < y+h; row++) {
+          for (let col = x; col < x+w; col++) {
+            let i = (row * canvas.width + col) * 4;
+            let delta = Math.abs(frame.data[i] - lastFrame.data[i]) +
+                        Math.abs(frame.data[i+1] - lastFrame.data[i+1]) +
+                        Math.abs(frame.data[i+2] - lastFrame.data[i+2]);
+            if (delta > 50) diff++;
+          }
         }
 
         // Normalizza in range 1–999
-        let score = Math.min(999, Math.floor(diff / 50));
-        if (score > 50) { // consideriamo colpo valido solo se sopra una soglia
+        let score = Math.min(999, Math.floor(diff / 20));
+        if (score > 50) { 
           locked = true;
           scoreEl.textContent = "Punteggio: " + score;
 
-          // aggiorna record
           if (score > record) {
             record = score;
             localStorage.setItem('record', record);
