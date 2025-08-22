@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Punch Ball Force</title>
+  <style>
+    body { 
+      margin: 0; 
+      background: black; 
+      color: white; 
+      font-family: "Courier New", monospace; 
+      text-align: center; 
+      overflow: hidden;
+    }
+    video, canvas { 
+      position: absolute; 
+      top: 0; left: 0; 
+      width: 100%; 
+      height: 100%; 
+      object-fit: cover; 
+    }
+    #forza {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 64px;
+      font-weight: bold;
+      color: #00ffcc;
+      text-shadow: 0 0 15px #00ffff, 0 0 30px #00ffff;
+      background: rgba(0,0,0,0.6);
+      padding: 15px 30px;
+      border-radius: 15px;
+      transition: transform 0.2s, color 0.2s;
+    }
+    .flash {
+      color: #ff0055 !important;
+      text-shadow: 0 0 20px #ff0055, 0 0 40px #ff0055;
+      transform: scale(1.3);
+    }
+    #startBtn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 32px;
+      padding: 20px 40px;
+      border-radius: 20px;
+      border: none;
+      background: #00ffcc;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <div id="forza">Forza: 0</div>
+  <button id="startBtn">Inizia</button>
+
+  <audio id="hitSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const forzaLabel = document.getElementById("forza");
+    const hitSound = document.getElementById("hitSound");
+    const startBtn = document.getElementById("startBtn");
+
+    let lastX = null, lastY = null, lastTime = null;
+
+    startBtn.addEventListener('click', async () => {
+      startBtn.style.display = 'none';
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      video.srcObject = stream;
+      video.play();
+      processFrame();
+    });
+
+    function processFrame() {
+      canvas.width = video.videoWidth || window.innerWidth;
+      canvas.height = video.videoHeight || window.innerHeight;
+
+      function process() {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = frame.data;
+
+        let redX = 0, redY = 0, count = 0;
+
+        // Trova pixel rossi con sensibilità regolabile
+        const rThreshold = 150, gThreshold = 100, bThreshold = 100;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i+1], b = data[i+2];
+          if (r > rThreshold && g < gThreshold && b < bThreshold) {
+            const index = i / 4;
+            const x = index % canvas.width;
+            const y = Math.floor(index / canvas.width);
+            redX += x;
+            redY += y;
+            count++;
+          }
+        }
+
+        if (count > 0) {
+          const avgX = redX / count;
+          const avgY = redY / count;
+          ctx.beginPath();
+          ctx.arc(avgX, avgY, 20, 0, 2 * Math.PI);
+          ctx.strokeStyle = "lime";
+          ctx.lineWidth = 4;
+          ctx.stroke();
+
+          const now = performance.now();
+          if (lastX !== null && lastY !== null && lastTime !== null) {
+            const dx = avgX - lastX;
+            const dy = avgY - lastY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const dt = (now - lastTime) / 1000;
+            const speed = dist / dt;
+
+            let forza = Math.min(999, Math.floor(speed / 5));
+            forzaLabel.textContent = "Forza: " + forza;
+
+            if (forza > 800) {
+              forzaLabel.classList.add("flash");
+              hitSound.play().catch(()=>{}); // evita errori su iOS
+              setTimeout(() => forzaLabel.classList.remove("flash"), 300);
+            }
+          }
+
+          lastX = avgX;
+          lastY = avgY;
+          lastTime = now;
+        }
+
+        requestAnimationFrame(process);
+      }
+      process();
+    }
+  </script>
+</body>
+</html>
