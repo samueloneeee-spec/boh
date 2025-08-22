@@ -1,115 +1,120 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Punchball Score</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      video { transform: scaleX(-1); } /* specchio */
-      .digits { font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
-    </style>
-  </head>
-  <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center">
-    <h1 class="text-2xl font-bold mb-4">Punchball Score</h1>
-    <video id="video" width="320" height="240" autoplay playsinline class="rounded-lg shadow mb-4"></video>
-    <canvas id="canvas" width="320" height="240" class="hidden"></canvas>
-    
-    <div class="text-center mb-4">
-      <div class="text-5xl font-bold digits" id="score">0</div>
-      <div class="mt-2 text-sm">Record: <span id="best">0</span></div>
-    </div>
-    
-    <div class="flex gap-4">
-      <button id="startBtn" class="bg-green-600 px-4 py-2 rounded-xl">Avvia Camera</button>
-      <button id="playAgainBtn" class="bg-blue-600 px-4 py-2 rounded-xl hidden">Gioca ancora</button>
-      <button id="resetBest" class="text-sm text-red-400 underline">Azzera Record</button>
-    </div>
+<head>
+  <meta charset="UTF-8">
+  <title>Punchball Score</title>
+  <style>
+    body {
+      background: linear-gradient(to bottom, #111, #333);
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      margin-top: 20px;
+      font-size: 2rem;
+      color: #ff4444;
+    }
+    #video {
+      margin-top: 20px;
+      width: 320px;
+      height: 240px;
+      border: 3px solid #fff;
+      border-radius: 12px;
+    }
+    #score, #record {
+      font-size: 2rem;
+      margin: 20px;
+    }
+    button {
+      background: #ff4444;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      font-size: 1.2rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #ff6666;
+    }
+    canvas {
+      display: none; /* nascosto: serve per calcolare il movimento */
+    }
+  </style>
+</head>
+<body>
+  <h1>Punchball Simulator</h1>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas" width="320" height="240"></canvas>
 
-    <script>
-      const video = document.getElementById('video');
-      const canvas = document.getElementById('canvas');
-      const ctx = canvas.getContext('2d');
-      const scoreEl = document.getElementById('score');
-      const bestEl = document.getElementById('best');
-      const startBtn = document.getElementById('startBtn');
-      const playAgainBtn = document.getElementById('playAgainBtn');
-      const resetBestBtn = document.getElementById('resetBest');
+  <div id="score">Punteggio: 0</div>
+  <div id="record">Record: 0</div>
+  <button id="reset">Gioca ancora</button>
 
-      let best = localStorage.getItem('punchball-best') || 0;
-      bestEl.textContent = best;
-      let running = false;
-      let lastFrame, calibrated = false, refColor;
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const recordEl = document.getElementById('record');
+    const resetBtn = document.getElementById('reset');
 
-      async function startCamera() {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          video.srcObject = stream;
-          running = true;
-          calibrated = false;
-          scoreEl.textContent = '0';
-          playAgainBtn.classList.add('hidden');
-          startBtn.classList.add('hidden');
-          requestAnimationFrame(loop);
-        } catch (err) {
-          alert('Permesso fotocamera negato o non disponibile.');
+    let lastFrame = null;
+    let locked = false;
+    let record = localStorage.getItem('record') || 0;
+    recordEl.textContent = "Record: " + record;
+
+    // Attiva fotocamera
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        alert("Errore accesso fotocamera: " + err);
+      });
+
+    function detectMovement() {
+      if (locked) return;
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      if (lastFrame) {
+        let diff = 0;
+        for (let i = 0; i < frame.data.length; i += 4) {
+          let delta = Math.abs(frame.data[i] - lastFrame.data[i]) +
+                      Math.abs(frame.data[i+1] - lastFrame.data[i+1]) +
+                      Math.abs(frame.data[i+2] - lastFrame.data[i+2]);
+          if (delta > 50) diff++;
+        }
+
+        // Normalizza in range 1–999
+        let score = Math.min(999, Math.floor(diff / 50));
+        if (score > 50) { // consideriamo colpo valido solo se sopra una soglia
+          locked = true;
+          scoreEl.textContent = "Punteggio: " + score;
+
+          // aggiorna record
+          if (score > record) {
+            record = score;
+            localStorage.setItem('record', record);
+            recordEl.textContent = "Record: " + record;
+          }
         }
       }
+      lastFrame = frame;
+      requestAnimationFrame(detectMovement);
+    }
 
-      function colorAtCenter(frame) {
-        const data = frame.data;
-        const cx = canvas.width/2, cy = canvas.height/2;
-        const idx = (Math.floor(cy)*canvas.width + Math.floor(cx))*4;
-        return [data[idx], data[idx+1], data[idx+2]];
-      }
+    resetBtn.addEventListener('click', () => {
+      locked = false;
+      scoreEl.textContent = "Punteggio: 0";
+    });
 
-      function dist(c1,c2){return Math.sqrt((c1[0]-c2[0])**2+(c1[1]-c2[1])**2+(c1[2]-c2[2])**2);}
-
-      let calibStart = null;
-      function loop(ts) {
-        if (!running) return;
-        ctx.drawImage(video,0,0,canvas.width,canvas.height);
-        const frame = ctx.getImageData(0,0,canvas.width,canvas.height);
-
-        if (!calibrated) {
-          if (!calibStart) calibStart = ts;
-          if (ts-calibStart>2000) {
-            refColor = colorAtCenter(frame);
-            calibrated = true;
-          }
-          requestAnimationFrame(loop);
-          return;
-        }
-
-        if (lastFrame) {
-          let diff=0,count=0;
-          for (let i=0;i<frame.data.length;i+=4){
-            const cNow=[frame.data[i],frame.data[i+1],frame.data[i+2]];
-            const cPrev=[lastFrame.data[i],lastFrame.data[i+1],lastFrame.data[i+2]];
-            if (dist(cNow,refColor)<80){ // pixel simile al punchball
-              const d = Math.abs(cNow[0]-cPrev[0])+Math.abs(cNow[1]-cPrev[1])+Math.abs(cNow[2]-cPrev[2]);
-              diff+=d; count++;
-            }
-          }
-          if (count>0){
-            const intensity=diff/count;
-            if (intensity>20){ // colpo
-              let score = Math.min(999,Math.floor(intensity*30));
-              if (score<1) score=1;
-              scoreEl.textContent=score;
-              if (score>best){ best=score; localStorage.setItem('punchball-best',best); bestEl.textContent=best;}
-              running=false;
-              playAgainBtn.classList.remove('hidden');
-            }
-          }
-        }
-        lastFrame=frame;
-        requestAnimationFrame(loop);
-      }
-
-      startBtn.onclick = startCamera;
-      playAgainBtn.onclick = startCamera;
-      resetBestBtn.onclick = ()=>{best=0; localStorage.setItem('punchball-best',0); bestEl.textContent='0';};
-    </script>
-  </body>
+    requestAnimationFrame(detectMovement);
+  </script>
+</body>
 </html>
