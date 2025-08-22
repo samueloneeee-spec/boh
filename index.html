@@ -50,20 +50,6 @@ playAgainBtn.addEventListener('click', ()=>{
     playAgainBtn.style.display='none';
 });
 
-function rgbToHsl(r,g,b){
-    r/=255; g/=255; b/=255;
-    const max=Math.max(r,g,b), min=Math.min(r,g,b);
-    let h,s,l=(max+min)/2;
-    if(max===min){h=s=0;} 
-    else{
-        const d=max-min;
-        s=l>0.5?d/(2-max-min):d/(max+min);
-        switch(max){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;case b:h=(r-g)/d+4;break;}
-        h/=6;
-    }
-    return [h*360, s*100, l*100];
-}
-
 function processFrame(){
     canvas.width = video.videoWidth||window.innerWidth;
     canvas.height = video.videoHeight||window.innerHeight;
@@ -76,10 +62,10 @@ function processFrame(){
         let redX=0, redY=0, count=0;
         const minPixels = 80;
 
+        // Rilevamento rosso RGB robusto
         for(let i=0;i<data.length;i+=4){
             const r=data[i], g=data[i+1], b=data[i+2];
-            const [h,s,l] = rgbToHsl(r,g,b);
-            if(((h>=0&&h<=10)||(h>=350&&h<=360)) && s>60 && l>30 && l<80){
+            if(r>150 && g<120 && b<120){ // rosso dominante
                 const idx = i/4;
                 const x = idx%canvas.width;
                 const y = Math.floor(idx/canvas.width);
@@ -91,7 +77,7 @@ function processFrame(){
             const avgX = redX/count;
             const avgY = redY/count;
 
-            lastPositions.push({x:avgX, y:avgY});
+            lastPositions.push({x: avgX, y: avgY});
             if(lastPositions.length>5) lastPositions.shift();
 
             const sum = lastPositions.reduce((acc,p)=>{acc.x+=p.x; acc.y+=p.y; return acc;},{x:0,y:0});
@@ -105,12 +91,11 @@ function processFrame(){
             ctx.stroke();
 
             if(lastPositions.length>=2){
-                const dx = centerX-lastPositions[lastPositions.length-2].x;
-                const dy = centerY-lastPositions[lastPositions.length-2].y;
+                const dx = centerX - lastPositions[lastPositions.length-2].x;
+                const dy = centerY - lastPositions[lastPositions.length-2].y;
                 const dist = Math.sqrt(dx*dx + dy*dy);
 
                 if(dist>movimentoMin){
-                    // nuova scala: lineare basata sulla distanza
                     let forzaCalcolata = Math.min(999, Math.floor(dist*20));
                     if(forzaCalcolata<50) forzaCalcolata=50;
 
