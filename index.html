@@ -33,6 +33,7 @@ let punteggioBloccato=false;
 let lastPositions=[];
 let lastSpeeds=[];
 let forzaAttuale=0;
+const movimentoMin=8; // px minimi per aggiornare forza
 
 startBtn.addEventListener('click',async()=>{
     startBtn.style.display='none';
@@ -59,7 +60,7 @@ function rgbToHsl(r,g,b){
     else{
         const d=max-min;
         s=l>0.5?d/(2-max-min):d/(max+min);
-        switch(max){case r: h=(g-b)/d + (g<b?6:0); break; case g: h=(b-r)/d +2; break; case b: h=(r-g)/d +4; break;}
+        switch(max){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;case b:h=(r-g)/d+4;break;}
         h/=6;
     }
     return [h*360,s*100,l*100];
@@ -110,7 +111,6 @@ function processFrame(){
                 const dy=centerY-lastPositions[lastPositions.length-2].y;
                 const dist=Math.sqrt(dx*dx+dy*dy);
 
-                const movimentoMin=8; // solo movimenti >8 px aggiornano forza
                 if(dist>movimentoMin){
                     const dt=1/60;
                     let speed=dist/dt;
@@ -119,9 +119,8 @@ function processFrame(){
                     if(lastSpeeds.length>5) lastSpeeds.shift();
                     const speedAvg=lastSpeeds.reduce((a,b)=>a+b,0)/lastSpeeds.length;
 
-                    const speedUsata=Math.max(speedAvg,120);
-
-                    let forzaCalcolata=Math.min(999,Math.floor(speedUsata/30)*10);
+                    // Calcolo forza solo se c'è stato movimento reale
+                    let forzaCalcolata=Math.min(999,Math.floor(speedAvg/30)*10);
                     forzaCalcolata=Math.max(forzaCalcolata,50);
 
                     forzaAttuale+=(forzaCalcolata-forzaAttuale)*0.1;
@@ -133,7 +132,7 @@ function processFrame(){
                         setTimeout(()=>forzaLabel.classList.remove("flash"),300);
                     }
 
-                    if(speedUsata>150 && !punteggioBloccato){
+                    if(speedAvg>150 && !punteggioBloccato){
                         punteggioBloccato=true;
                         forzaAttuale=Math.floor(forzaAttuale);
                         forzaLabel.textContent="Forza: "+forzaAttuale;
