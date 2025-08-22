@@ -1,131 +1,315 @@
-<!DOCTYPE html>
+<!-- File: /index.html -->
+<!doctype html>
 <html lang="it">
-<head>
-<meta charset="UTF-8">
-<title>Punch Ball Force</title>
-<style>
-body { margin:0; background:black; color:white; font-family:"Courier New", monospace; text-align:center; overflow:hidden; }
-video, canvas { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; }
-#forza { position:absolute; top:20px; left:50%; transform:translateX(-50%); font-size:64px; font-weight:bold; color:#00ffcc; text-shadow:0 0 15px #00ffff,0 0 30px #00ffff; background:rgba(0,0,0,0.6); padding:15px 30px; border-radius:15px; transition: transform 0.2s, color 0.2s; }
-.flash { color:#ff0055 !important; text-shadow:0 0 20px #ff0055,0 0 40px #ff0055; transform:scale(1.3);}
-#startBtn,#playAgainBtn { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:32px; padding:20px 40px; border-radius:20px; border:none; background:#00ffcc; color:black; font-weight:bold; cursor:pointer; z-index:10;}
-#playAgainBtn{display:none;}
-</style>
-</head>
-<body>
-<video id="video" autoplay playsinline muted></video>
-<canvas id="canvas"></canvas>
-<div id="forza">Forza: 0</div>
-<button id="startBtn">Inizia</button>
-<button id="playAgainBtn">Gioca Ancora</button>
-<audio id="hitSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Punchball Score</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="theme-color" content="#111827" />
+    <style>
+      /* Per un aspetto "display digitale" semplice */
+      .digits { font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+    </style>
+  </head>
+  <body class="bg-gray-900 text-gray-100 min-h-screen">
+    <main class="max-w-3xl mx-auto px-4 py-6">
+      <header class="flex items-center justify-between mb-4">
+        <h1 class="text-xl md:text-2xl font-semibold">Punchball Score</h1>
+        <div class="flex items-center gap-3">
+          <div class="text-sm md:text-base bg-gray-800 px-3 py-1.5 rounded-xl">
+            <span class="opacity-75">Record:</span>
+            <span id="best" class="font-bold digits">0</span>
+          </div>
+          <button id="resetBest" class="text-xs text-red-300 hover:text-red-200 underline underline-offset-4">azzera record</button>
+        </div>
+      </header>
 
-<script>
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const forzaLabel = document.getElementById("forza");
-const hitSound = document.getElementById("hitSound");
-const startBtn = document.getElementById("startBtn");
-const playAgainBtn = document.getElementById("playAgainBtn");
+      <section class="grid md:grid-cols-2 gap-4 items-start">
+        <!-- Schermo punteggio -->
+        <div class="bg-gray-800/70 rounded-2xl p-4 shadow-xl order-2 md:order-1">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm opacity-80">Punteggio</span>
+            <span id="status" class="text-xs px-2 py-0.5 rounded-full bg-gray-700">setup…</span>
+          </div>
+          <div class="text-6xl md:text-7xl lg:text-8xl font-extrabold digits text-center select-none">
+            <span id="score">000</span>
+          </div>
+          <div class="mt-4 grid grid-cols-2 gap-2 text-xs">
+            <div class="bg-gray-900/40 rounded-xl p-2">
+              <div class="opacity-70">Sensibilità</div>
+              <input id="sensitivity" type="range" min="2" max="12" step="1" value="6" class="w-full"/>
+              <div class="flex justify-between opacity-60 mt-1"><span>bassa</span><span>alta</span></div>
+            </div>
+            <div class="bg-gray-900/40 rounded-xl p-2">
+              <label class="flex items-center gap-2">
+                <input id="ballOnly" type="checkbox" class="accent-emerald-500" checked/>
+                <span>Solo punchball (colore)</span>
+              </label>
+              <button id="recalib" class="mt-2 text-xs px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500">Calibra</button>
+            </div>
+          </div>
 
-let punteggioBloccato = false;
-let lastPositions = [];
-let forzaAttuale = 0;
-const movimentoMin = 8;
+          <div class="mt-4 flex items-center gap-2">
+            <button id="playAgain" class="w-full px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed">Gioca ancora</button>
+          </div>
+          <p class="mt-2 text-xs opacity-70">Media ≈ <b>500</b>, molto forte &gt; <b>800</b>. Il punteggio si blocca dopo il colpo.</p>
+        </div>
 
-startBtn.addEventListener('click', async () => {
-    startBtn.style.display = 'none';
-    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-    video.srcObject = stream;
-    video.play();
-    processFrame();
-});
+        <!-- Video -->
+        <div class="relative order-1 md:order-2">
+          <div class="aspect-video bg-black/60 rounded-2xl overflow-hidden ring-1 ring-white/10">
+            <video id="video" class="w-full h-full object-cover" autoplay playsinline muted></video>
+          </div>
 
-playAgainBtn.addEventListener('click', ()=>{
-    punteggioBloccato = false;
-    forzaAttuale = 0;
-    lastPositions = [];
-    forzaLabel.textContent = "Forza: 0";
-    playAgainBtn.style.display='none';
-});
+          <!-- Overlay istruzioni/calibrazione -->
+          <div id="overlay" class="pointer-events-none absolute inset-0 grid place-items-center">
+            <div class="bg-gray-900/80 backdrop-blur rounded-2xl p-4 md:p-5 ring-1 ring-white/10 text-center max-w-sm">
+              <h2 class="font-semibold mb-1">Calibrazione colore</h2>
+              <p class="text-sm opacity-80">Tieni il punchball <b>al centro</b> per 2 secondi. Riconosceremo solo quel colore.</p>
+              <p id="overlayHint" class="text-xs opacity-60 mt-2">In alternativa, disattiva “Solo punchball (colore)”.</p>
+            </div>
+          </div>
 
-function processFrame(){
-    canvas.width = video.videoWidth||window.innerWidth;
-    canvas.height = video.videoHeight||window.innerHeight;
+          <!-- Messaggi d'errore -->
+          <div id="error" class="hidden mt-2 text-sm text-red-300"></div>
+        </div>
+      </section>
 
-    function process(){
-        ctx.drawImage(video,0,0,canvas.width,canvas.height);
-        const frame = ctx.getImageData(0,0,canvas.width,canvas.height);
-        const data = frame.data;
+      <footer class="mt-6 text-xs opacity-60">
+        Funziona interamente nel browser (nessun backend). Ideale per GitHub Pages.
+      </footer>
+    </main>
 
-        let redX=0, redY=0, count=0;
-        const minPixels = 80;
+    <!-- Canvas nascosti per l'elaborazione -->
+    <canvas id="proc" class="hidden" width="160" height="120"></canvas>
 
-        // Rilevamento punch ball rosso robusto
-        for(let i=0;i<data.length;i+=4){
-            const r=data[i], g=data[i+1], b=data[i+2];
-            const rgbSum = r+g+b;
-            if(r>150 && g<100 && b<100 && rgbSum < 400){ // esclude pelle chiara
-                const idx = i/4;
-                const x = idx%canvas.width;
-                const y = Math.floor(idx/canvas.width);
-                redX+=x; redY+=y; count++;
+    <script type="module">
+      // --- Configurazione -----------------------------------------------------
+      const PROC_W = 160, PROC_H = 120; // risoluzione bassa per performance
+      const AUTO_CALIB_MS = 2000;
+      const COOLDOWN_MS = 900; // evita doppio-trigger
+      const DEFAULT_ROLLING_MAX = 22000; // punto di partenza per la scala punteggio
+      const ROLLING_DECAY = 0.995; // decadimento del max dinamico per adattarsi col tempo
+      const MAP_GAMMA = 0.6; // curva: <1 = più punteggi medi
+
+      // --- Elementi UI --------------------------------------------------------
+      const video = document.getElementById('video');
+      const proc = document.getElementById('proc');
+      const pctx = proc.getContext('2d', { willReadFrequently: true });
+      const scoreEl = document.getElementById('score');
+      const bestEl = document.getElementById('best');
+      const statusEl = document.getElementById('status');
+      const errorEl = document.getElementById('error');
+      const overlay = document.getElementById('overlay');
+      const overlayHint = document.getElementById('overlayHint');
+      const playAgainBtn = document.getElementById('playAgain');
+      const sensitivityInput = document.getElementById('sensitivity');
+      const ballOnlyInput = document.getElementById('ballOnly');
+      const recalibBtn = document.getElementById('recalib');
+      const resetBestBtn = document.getElementById('resetBest');
+
+      // --- Stato runtime ------------------------------------------------------
+      let stream = null;
+      let rafId = null;
+      let prevGray = new Uint8ClampedArray(PROC_W * PROC_H);
+      let gameActive = false, locked = false, inCooldown = false;
+      let autoCalibrating = true, autoStartTs = 0;
+      let targetHSV = { h: 0, s: 1, v: 1 }; // inizializzato durante la calibrazione
+      let rollingMax = DEFAULT_ROLLING_MAX;
+      let ema = 0, emaDev = 0; // per soglia dinamica
+      let lastHitTs = 0;
+
+      // Local storage per record
+      const BEST_KEY = 'punchball_best';
+      bestEl.textContent = localStorage.getItem(BEST_KEY) ?? '0';
+
+      // --- Utilità colore -----------------------------------------------------
+      function rgb2hsv(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        const d = max - min;
+        let h = 0;
+        if (d !== 0) {
+          switch (max) {
+            case r: h = ((g - b) / d) % 6; break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+          }
+          h *= 60; if (h < 0) h += 360;
+        }
+        const s = max === 0 ? 0 : d / max;
+        const v = max;
+        return { h, s, v };
+      }
+
+      function hsvDistance(a, b) {
+        // Distanza semplice: differenza circolare su H + differenze su S e V
+        let dh = Math.abs(a.h - b.h); dh = Math.min(dh, 360 - dh) / 180; // [0..1]
+        const ds = Math.abs(a.s - b.s);
+        const dv = Math.abs(a.v - b.v);
+        return dh * 0.7 + ds * 0.2 + dv * 0.1; // pesi: H dominante
+      }
+
+      // --- Mappatura punteggio ------------------------------------------------
+      function mapToScore(value) {
+        rollingMax = Math.max(value, rollingMax * ROLLING_DECAY);
+        const denom = Math.max(1, rollingMax * 0.9);
+        const norm = Math.min(1, value / denom);
+        const curved = Math.pow(norm, MAP_GAMMA);
+        const s = Math.max(1, Math.min(999, Math.round(curved * 999)));
+        return s;
+      }
+
+      function setScore(n) {
+        scoreEl.textContent = ('' + n).padStart(3, '0');
+      }
+
+      function lockScore(n) {
+        locked = true; gameActive = false; inCooldown = true; lastHitTs = performance.now();
+        setScore(n);
+        statusEl.textContent = 'bloccato';
+        statusEl.className = 'text-xs px-2 py-0.5 rounded-full bg-amber-600';
+        // aggiorna record
+        const best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
+        if (n > best) {
+          localStorage.setItem(BEST_KEY, String(n));
+          bestEl.textContent = String(n);
+        }
+      }
+
+      function resetRound() {
+        locked = false; gameActive = true; inCooldown = false;
+        ema = 0; emaDev = 0; // reset rumore
+        // non resettiamo rollingMax per mantenere una scala consistente, ma lo facciamo decadere
+        setScore(0);
+        statusEl.textContent = 'in gioco';
+        statusEl.className = 'text-xs px-2 py-0.5 rounded-full bg-emerald-600';
+      }
+
+      // --- Loop principale ----------------------------------------------------
+      function processFrame() {
+        if (!gameActive) { rafId = requestAnimationFrame(processFrame); return; }
+
+        // Disegna frame ridotto
+        pctx.drawImage(video, 0, 0, PROC_W, PROC_H);
+        const img = pctx.getImageData(0, 0, PROC_W, PROC_H);
+        const data = img.data;
+
+        // Calibrazione automatica sui primi 2s: patch centrale 40x40
+        if (autoCalibrating) {
+          const size = 40, cx = PROC_W >> 1, cy = PROC_H >> 1;
+          let h = 0, s = 0, v = 0, n = 0;
+          for (let y = cy - (size>>1); y < cy + (size>>1); y++) {
+            for (let x = cx - (size>>1); x < cx + (size>>1); x++) {
+              const idx = (y * PROC_W + x) * 4;
+              const hsv = rgb2hsv(data[idx], data[idx+1], data[idx+2]);
+              h += hsv.h; s += hsv.s; v += hsv.v; n++;
             }
+          }
+          if (n) targetHSV = { h: h/n, s: s/n, v: v/n };
         }
 
-        if(count>=minPixels && !punteggioBloccato){
-            const avgX = redX/count;
-            const avgY = redY/count;
+        // Per-pixel: grigio + diff + maschera colore opzionale
+        const sens = Number(sensitivityInput.value); // 2..12
+        const colorTol = Math.max(0.06, 0.18 - (sens - 2) * 0.008); // più sensibilità → tolleranza colore più stretta
+        let sum = 0;
+        for (let i = 0, p = 0; i < prevGray.length; i++, p += 4) {
+          const r = data[p], g = data[p+1], b = data[p+2];
+          // luminanza semplice
+          const gray = (r * 0.299 + g * 0.587 + b * 0.114) | 0;
 
-            lastPositions.push({x: avgX, y: avgY});
-            if(lastPositions.length>5) lastPositions.shift();
+          let use = 1;
+          if (ballOnlyInput.checked) {
+            const dist = hsvDistance(rgb2hsv(r, g, b), targetHSV);
+            if (dist > colorTol) use = 0;
+          }
 
-            const sum = lastPositions.reduce((acc,p)=>{acc.x+=p.x; acc.y+=p.y; return acc;},{x:0,y:0});
-            const centerX = sum.x/lastPositions.length;
-            const centerY = sum.y/lastPositions.length;
-
-            ctx.beginPath();
-            ctx.arc(centerX,centerY,20,0,2*Math.PI);
-            ctx.strokeStyle="lime";
-            ctx.lineWidth=4;
-            ctx.stroke();
-
-            if(lastPositions.length>=2){
-                const dx = centerX - lastPositions[lastPositions.length-2].x;
-                const dy = centerY - lastPositions[lastPositions.length-2].y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-
-                if(dist>movimentoMin){
-                    // Calcolo forza calibrata
-                    let forzaCalcolata = Math.min(999, Math.floor(dist*12)); // multiplo per colpo medio ~500
-                    if(forzaCalcolata<=50) forzaCalcolata = 0; // ignora colpi troppo piccoli
-
-                    if(forzaCalcolata>0){
-                        forzaAttuale += (forzaCalcolata-forzaAttuale)*0.1;
-                        forzaLabel.textContent = "Forza: " + Math.floor(forzaAttuale);
-
-                        if(forzaAttuale>800){
-                            forzaLabel.classList.add("flash");
-                            hitSound.play().catch(()=>{});
-                            setTimeout(()=>forzaLabel.classList.remove("flash"),300);
-                        }
-
-                        if(dist>20 && !punteggioBloccato){
-                            punteggioBloccato = true;
-                            forzaAttuale = Math.floor(forzaAttuale);
-                            forzaLabel.textContent = "Forza: " + forzaAttuale;
-                            playAgainBtn.style.display='block';
-                        }
-                    }
-                }
-            }
+          const d = Math.abs(gray - prevGray[i]) * use;
+          sum += d;
+          prevGray[i] = gray;
         }
 
-        requestAnimationFrame(process);
-    }
-    process();
-}
-</script>
-</body>
+        // Aggiorna soglia dinamica (EMA + deviazione media)
+        const alpha = 0.05; // reattività
+        ema = (1 - alpha) * ema + alpha * sum;
+        emaDev = (1 - alpha) * emaDev + alpha * Math.abs(sum - ema);
+
+        // Soglia: dipende da sensibilità + rumore corrente
+        const k = Number(sensitivityInput.value) / 2; // 1..6
+        const threshold = ema + k * (emaDev + 400);
+
+        // Trigger pugno
+        const now = performance.now();
+        if (!locked && !inCooldown && sum > threshold && sum > 2000) {
+          const s = mapToScore(sum);
+          lockScore(s);
+        }
+        if (inCooldown && (now - lastHitTs) > COOLDOWN_MS) inCooldown = false;
+
+        // Mostra punteggio "live" solo se non bloccato
+        if (!locked) setScore(Math.max(0, Math.min(999, Math.round(mapToScore(sum) * 0.7))));
+
+        rafId = requestAnimationFrame(processFrame);
+      }
+
+      // --- Camera -------------------------------------------------------------
+      async function startCamera() {
+        try {
+          statusEl.textContent = 'permessi camera…';
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false,
+          });
+          video.srcObject = stream;
+          await video.play();
+          statusEl.textContent = 'calibrazione…';
+          overlay.classList.remove('hidden');
+          autoCalibrating = true; autoStartTs = performance.now();
+          setTimeout(() => { autoCalibrating = false; overlay.classList.add('hidden'); statusEl.textContent = 'in gioco'; }, AUTO_CALIB_MS);
+          gameActive = true; locked = false; inCooldown = false;
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame(processFrame);
+        } catch (err) {
+          console.error(err);
+          errorEl.textContent = 'Errore: impossibile accedere alla fotocamera. Controlla i permessi del browser.';
+          errorEl.classList.remove('hidden');
+          statusEl.textContent = 'errore';
+        }
+      }
+
+      // --- Eventi UI ----------------------------------------------------------
+      playAgainBtn.addEventListener('click', () => {
+        resetRound();
+      });
+
+      recalibBtn.addEventListener('click', () => {
+        // Mostra overlay e riavvia finestra di calibrazione
+        overlay.classList.remove('hidden');
+        statusEl.textContent = 'calibrazione…';
+        autoCalibrating = true; setTimeout(() => { autoCalibrating = false; overlay.classList.add('hidden'); statusEl.textContent = 'in gioco'; }, AUTO_CALIB_MS);
+      });
+
+      ballOnlyInput.addEventListener('change', () => {
+        overlayHint.textContent = ballOnlyInput.checked
+          ? 'Tieni il punchball al centro per 2s.'
+          : 'Rilevamento basato solo sul movimento.';
+        if (ballOnlyInput.checked) recalibBtn.click();
+      });
+
+      resetBestBtn.addEventListener('click', () => {
+        localStorage.removeItem(BEST_KEY);
+        bestEl.textContent = '0';
+      });
+
+      // Avvio
+      startCamera();
+
+      // Pulizia quando si lascia la pagina
+      window.addEventListener('beforeunload', () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        if (stream) stream.getTracks().forEach(t => t.stop());
+      });
+    </script>
+  </body>
 </html>
