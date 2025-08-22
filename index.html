@@ -38,7 +38,7 @@
       text-shadow: 0 0 20px #ff0055, 0 0 40px #ff0055;
       transform: scale(1.3);
     }
-    #startBtn {
+    #startBtn, #playAgainBtn {
       position: absolute;
       top: 50%;
       left: 50%;
@@ -53,6 +53,7 @@
       cursor: pointer;
       z-index: 10;
     }
+    #playAgainBtn { display: none; }
   </style>
 </head>
 <body>
@@ -60,6 +61,7 @@
   <canvas id="canvas"></canvas>
   <div id="forza">Forza: 0</div>
   <button id="startBtn">Inizia</button>
+  <button id="playAgainBtn">Gioca Ancora</button>
 
   <audio id="hitSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
 
@@ -70,8 +72,10 @@
     const forzaLabel = document.getElementById("forza");
     const hitSound = document.getElementById("hitSound");
     const startBtn = document.getElementById("startBtn");
+    const playAgainBtn = document.getElementById("playAgainBtn");
 
     let lastX = null, lastY = null, lastTime = null;
+    let punteggioBloccato = false;
 
     startBtn.addEventListener('click', async () => {
       startBtn.style.display = 'none';
@@ -79,6 +83,13 @@
       video.srcObject = stream;
       video.play();
       processFrame();
+    });
+
+    playAgainBtn.addEventListener('click', () => {
+      punteggioBloccato = false;
+      forzaLabel.textContent = "Forza: 0";
+      lastX = lastY = lastTime = null;
+      playAgainBtn.style.display = 'none';
     });
 
     function processFrame() {
@@ -91,9 +102,8 @@
         const data = frame.data;
 
         let redX = 0, redY = 0, count = 0;
-
-        // Trova pixel rossi con sensibilità regolabile
-        const rThreshold = 150, gThreshold = 100, bThreshold = 100;
+        const rThreshold = 180, gThreshold = 120, bThreshold = 120;
+        const minPixels = 50;
 
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i], g = data[i+1], b = data[i+2];
@@ -107,7 +117,7 @@
           }
         }
 
-        if (count > 0) {
+        if (count >= minPixels && !punteggioBloccato) {
           const avgX = redX / count;
           const avgY = redY / count;
           ctx.beginPath();
@@ -124,13 +134,18 @@
             const dt = (now - lastTime) / 1000;
             const speed = dist / dt;
 
-            let forza = Math.min(999, Math.floor(speed / 5));
+            let forza = Math.min(999, Math.floor(speed / 10)); // più difficile arrivare a 999
             forzaLabel.textContent = "Forza: " + forza;
 
             if (forza > 800) {
               forzaLabel.classList.add("flash");
-              hitSound.play().catch(()=>{}); // evita errori su iOS
+              hitSound.play().catch(()=>{});
               setTimeout(() => forzaLabel.classList.remove("flash"), 300);
+            }
+
+            if (speed > 200 && !punteggioBloccato) { // colpo rilevato
+              punteggioBloccato = true;
+              playAgainBtn.style.display = 'block';
             }
           }
 
