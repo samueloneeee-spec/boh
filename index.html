@@ -62,10 +62,9 @@ function processFrame(){
         let redX=0, redY=0, count=0;
         const minPixels = 80;
 
-        // Rilevamento rosso RGB robusto
         for(let i=0;i<data.length;i+=4){
             const r=data[i], g=data[i+1], b=data[i+2];
-            if(r>150 && g<120 && b<120){ // rosso dominante
+            if(r>150 && g<120 && b<120){
                 const idx = i/4;
                 const x = idx%canvas.width;
                 const y = Math.floor(idx/canvas.width);
@@ -96,23 +95,26 @@ function processFrame(){
                 const dist = Math.sqrt(dx*dx + dy*dy);
 
                 if(dist>movimentoMin){
-                    let forzaCalcolata = Math.min(999, Math.floor(dist*20));
-                    if(forzaCalcolata<50) forzaCalcolata=50;
+                    // nuovo moltiplicatore per colpo medio ~500
+                    let forzaCalcolata = Math.min(999, Math.floor(dist*10));
+                    if(forzaCalcolata<=50) forzaCalcolata = 0; // ignora colpi troppo piccoli
 
-                    forzaAttuale += (forzaCalcolata-forzaAttuale)*0.1;
-                    forzaLabel.textContent = "Forza: " + Math.floor(forzaAttuale);
+                    if(forzaCalcolata>0){
+                        forzaAttuale += (forzaCalcolata-forzaAttuale)*0.1;
+                        forzaLabel.textContent = "Forza: " + Math.floor(forzaAttuale);
 
-                    if(forzaAttuale>800){
-                        forzaLabel.classList.add("flash");
-                        hitSound.play().catch(()=>{});
-                        setTimeout(()=>forzaLabel.classList.remove("flash"),300);
-                    }
+                        if(forzaAttuale>800){
+                            forzaLabel.classList.add("flash");
+                            hitSound.play().catch(()=>{});
+                            setTimeout(()=>forzaLabel.classList.remove("flash"),300);
+                        }
 
-                    if(dist>20 && !punteggioBloccato){
-                        punteggioBloccato = true;
-                        forzaAttuale = Math.floor(forzaAttuale);
-                        forzaLabel.textContent = "Forza: " + forzaAttuale;
-                        playAgainBtn.style.display='block';
+                        if(dist>20 && !punteggioBloccato){
+                            punteggioBloccato = true;
+                            forzaAttuale = Math.floor(forzaAttuale);
+                            forzaLabel.textContent = "Forza: " + forzaAttuale;
+                            playAgainBtn.style.display='block';
+                        }
                     }
                 }
             }
